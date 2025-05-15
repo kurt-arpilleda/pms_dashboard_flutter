@@ -9,8 +9,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiServiceJP {
   static const List<String> apiUrls = [
-    "https://192.168.1.213/",
-    "https://220.157.175.232/"
+    "http://192.168.1.213/",
+    "http://220.157.175.232/"
   ];
 
   static const Duration requestTimeout = Duration(seconds: 2);
@@ -93,7 +93,7 @@ class ApiServiceJP {
               String relativePath = data["softwareLink"];
               String fullUrl = Uri.parse(apiUrl).resolve(relativePath).toString();
               if (idNumber != null) {
-                fullUrl += "?idNumber=$idNumber";
+                fullUrl += "?arkLog=06092003&idNumber=$idNumber";
               }
               return _ApiResult(fullUrl, apiUrl);
             } else {
