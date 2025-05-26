@@ -433,105 +433,122 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreen> with Widg
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Container(
-        padding: EdgeInsets.all(20),
-        height: MediaQuery.of(context).size.height * 0.35,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
-                ),
+      builder: (context) => LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: 0,
+                maxHeight: constraints.maxHeight,
               ),
-            ),
-            SizedBox(height: 20),
-            Text(
-              _currentLanguageFlag == 2 ? 'ダウンロード' : 'Download',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            SizedBox(height: 15),
-            Text(
-              _currentLanguageFlag == 2 ? 'ファイル名:' : 'File name:',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey[600],
-              ),
-            ),
-            SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey[300]!),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                fileName,
-                style: TextStyle(fontSize: 16),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Spacer(),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+              child: IntrinsicHeight(
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: 20,
+                    right: 20,
+                    top: 20,
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      _currentLanguageFlag == 2 ? 'キャンセル' : 'Cancel',
-                      style: TextStyle(fontSize: 16),
-                    ),
+                      SizedBox(height: 20),
+                      Text(
+                        _currentLanguageFlag == 2 ? 'ダウンロード' : 'Download',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 15),
+                      Text(
+                        _currentLanguageFlag == 2 ? 'ファイル名:' : 'File name:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Container(
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey[300]!),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          fileName,
+                          style: TextStyle(fontSize: 16),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.pop(context);
+                              },
+                              style: OutlinedButton.styleFrom(
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                _currentLanguageFlag == 2 ? 'キャンセル' : 'Cancel',
+                                style: TextStyle(fontSize: 16),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 15),
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                if (isPdf) {
+                                  await _viewPdfInternally(url);
+                                } else {
+                                  await _launchInBrowser(url);
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                padding: EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: Text(
+                                isPdf
+                                    ? (_currentLanguageFlag == 2 ? '表示' : 'View')
+                                    : (_currentLanguageFlag == 2 ? 'ダウンロード' : 'Download'),
+                                style: TextStyle(fontSize: 16, color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                SizedBox(width: 15),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      if (isPdf) {
-                        await _viewPdfInternally(url);
-                      } else {
-                        await _launchInBrowser(url);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      isPdf
-                          ? (_currentLanguageFlag == 2 ? '表示' : 'View')
-                          : (_currentLanguageFlag == 2 ? 'ダウンロード' : 'Download'),
-                      style: TextStyle(fontSize: 16, color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ],
-        ),
+          );
+        },
       ),
     ).then((_) {
-      // Reset the flag when dialog is dismissed
       _isDownloadDialogShowing = false;
     });
   }
