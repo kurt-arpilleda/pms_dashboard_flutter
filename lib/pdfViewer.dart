@@ -8,39 +8,55 @@ class PDFViewerScreen extends StatefulWidget {
   final String pdfUrl;
   final String fileName;
   final int languageFlag;
+  final bool shouldDeleteOnClose;
 
   const PDFViewerScreen({
     Key? key,
     required this.pdfUrl,
     required this.fileName,
     required this.languageFlag,
+    this.shouldDeleteOnClose = false,
   }) : super(key: key);
 
   @override
   State<PDFViewerScreen> createState() => _PDFViewerScreenState();
 }
 
-class _PDFViewerScreenState extends State<PDFViewerScreen> {
+class _PDFViewerScreenState extends State<PDFViewerScreen> with WidgetsBindingObserver {
   String? localPath;
   bool isLoading = true;
   bool isError = false;
   String errorMessage = '';
   double downloadProgress = 0.0;
   DateTime? remoteLastModified;
+  bool _isExiting = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     loadPdf();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _deletePdfOnExit();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      _deletePdfOnExit();
+    }
   }
 
   Future<void> loadPdf() async {
     try {
-      // Use getApplicationDocumentsDirectory for persistent storage
       final dir = await getApplicationDocumentsDirectory();
       final file = File('${dir.path}/${widget.fileName}');
 
-      // First, check the remote file's last modified date
       final headResponse = await http.head(Uri.parse(widget.pdfUrl));
       if (headResponse.statusCode != 200) {
         throw Exception('Failed to check PDF: ${headResponse.statusCode}');
@@ -51,12 +67,9 @@ class _PDFViewerScreenState extends State<PDFViewerScreen> {
           ? HttpDate.parse(lastModifiedHeader)
           : null;
 
-      // Check if file exists and compare modification dates
       bool shouldDownload = true;
       if (await file.exists()) {
         final localLastModified = await file.lastModified();
-
-        // Only skip download if remote doesn't provide last-modified or if local is newer/equal
         shouldDownload = remoteLastModified != null &&
             localLastModified.isBefore(remoteLastModified!);
       }
@@ -64,19 +77,13 @@ class _PDFViewerScreenState extends State<PDFViewerScreen> {
       if (shouldDownload) {
         final request = await http.Client().send(http.Request('GET', Uri.parse(widget.pdfUrl)));
 
-        if (request.statusCode != 200) {
-          throw Exception('Failed to download PDF: ${request.statusCode}');
-        }
-
         final contentLength = request.contentLength ?? 0;
         final List<int> bytes = [];
-
         int received = 0;
 
         await for (var chunk in request.stream) {
           bytes.addAll(chunk);
           received += chunk.length;
-
           if (contentLength != 0) {
             setState(() {
               downloadProgress = received / contentLength;
@@ -85,8 +92,6 @@ class _PDFViewerScreenState extends State<PDFViewerScreen> {
         }
 
         await file.writeAsBytes(bytes);
-
-        // Update local file's modified date to match server's if available
         if (remoteLastModified != null) {
           await file.setLastModified(remoteLastModified!);
         }
@@ -96,7 +101,6 @@ class _PDFViewerScreenState extends State<PDFViewerScreen> {
         localPath = file.path;
         isLoading = false;
       });
-
     } catch (e) {
       setState(() {
         isError = true;
@@ -106,43 +110,69 @@ class _PDFViewerScreenState extends State<PDFViewerScreen> {
     }
   }
 
+  Future<void> _deletePdfOnExit() async {
+    if (_isExiting || !widget.shouldDeleteOnClose || localPath == null) return;
+
+    _isExiting = true;
+    try {
+      final file = File(localPath!);
+      if (await file.exists()) {
+        await file.delete();
+        debugPrint('PDF deleted on exit');
+      }
+    } catch (e) {
+      debugPrint('Error deleting PDF on exit: $e');
+    } finally {
+      _isExiting = false;
+    }
+  }
+
+  Future<bool> _onWillPop() async {
+    await _deletePdfOnExit();
+    return true; // Allow navigation
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF2053B3),
-        leading: IconButton(
-          icon: const Icon(Icons.close, color: Colors.white),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          widget.languageFlag == 2 ? '手引き' : 'Manual', // 2 is Japanese flag
-          style: const TextStyle(
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF2053B3),
+          leading: IconButton(
+            icon: const Icon(Icons.close, color: Colors.white),
+            onPressed: () async {
+              await _deletePdfOnExit();
+              if (mounted) Navigator.of(context).pop();
+            },
+          ),
+          title: Text(
+            widget.fileName.toLowerCase().contains('manual')
+                ? (widget.languageFlag == 2 ? '手引き' : 'Manual')
+                : widget.fileName,
+            style: const TextStyle(
               color: Colors.white,
               fontSize: 24,
               overflow: TextOverflow.ellipsis,
-              fontWeight: FontWeight.bold
+              fontWeight: FontWeight.bold,
+            ),
           ),
+          centerTitle: true,
         ),
-        centerTitle: true,
-      ),
-      body: isLoading
-          ? buildLoading()
-          : isError
-          ? Center(child: Text('Error: $errorMessage'))
-          : PDFView(
-        filePath: localPath,
-        enableSwipe: true,
-        swipeHorizontal: false,
-        autoSpacing: true,
-        pageFling: false, // Disable page fling animation
-        pageSnap: false, // This is the key parameter for continuous scrolling
-        onError: (error) {
-          debugPrint(error.toString());
-        },
-        onPageError: (page, error) {
-          debugPrint('$page: ${error.toString()}');
-        },
+        body: isLoading
+            ? buildLoading()
+            : isError
+            ? Center(child: Text('Error: $errorMessage'))
+            : PDFView(
+          filePath: localPath,
+          enableSwipe: true,
+          swipeHorizontal: false,
+          autoSpacing: true,
+          pageFling: false,
+          pageSnap: false,
+          onError: (error) => debugPrint(error.toString()),
+          onPageError: (page, error) => debugPrint('$page: ${error.toString()}'),
+        ),
       ),
     );
   }
@@ -156,7 +186,9 @@ class _PDFViewerScreenState extends State<PDFViewerScreen> {
           children: [
             if (downloadProgress > 0) ...[
               Text(
-                remoteLastModified != null ? 'Updating document...' : 'Downloading...',
+                remoteLastModified != null
+                    ? (widget.languageFlag == 2 ? 'ドキュメントを更新中...' : 'Updating document...')
+                    : (widget.languageFlag == 2 ? 'ダウンロード中...' : 'Downloading...'),
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,

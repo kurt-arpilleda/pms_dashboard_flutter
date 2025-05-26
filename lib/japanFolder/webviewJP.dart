@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +14,6 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:mime/mime.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:io';
 import 'package:unique_identifier/unique_identifier.dart';
 
 class SoftwareWebViewScreenJP extends StatefulWidget {
@@ -48,6 +48,7 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
   bool _isCountryDialogShowing = false;
   bool _isCountryLoadingPh = false;
   bool _isCountryLoadingJp = false;
+  bool _isDownloadDialogShowing = false;
 
   @override
   void initState() {
@@ -71,12 +72,12 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Only check for updates if we're not already in the middle of an update
       if (!AutoUpdate.isUpdating) {
         _checkForUpdates();
       }
     }
   }
+
   void _initializePullToRefresh() {
     pullToRefreshController = PullToRefreshController(
       settings: PullToRefreshSettings(
@@ -94,7 +95,6 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
     try {
       await AutoUpdate.checkForUpdate(context);
     } catch (e) {
-      // Handle error if update check fails
       debugPrint('Update check failed: $e');
     }
   }
@@ -105,6 +105,7 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
     await _fetchAndLoadUrl();
     await _loadPhOrJp();
   }
+
   Future<void> _fetchDeviceInfo() async {
     try {
       String? deviceId = await UniqueIdentifier.serial;
@@ -114,7 +115,6 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
 
       final deviceResponse = await apiServiceJP.checkDeviceId(deviceId);
       if (deviceResponse['success'] == true && deviceResponse['idNumber'] != null) {
-        // Store the IDNumber in SharedPreferences (in case it's not already saved by the API)
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('IDNumberJP', deviceResponse['idNumber']);
 
@@ -152,7 +152,7 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
           _firstName = profileData["firstName"];
           _surName = profileData["surName"];
           _profilePictureUrl = isPrimaryUrlValid ? primaryUrl : isFallbackUrlValid ? fallbackUrl : null;
-          _currentLanguageFlag = profileData["languageFlag"] ?? _currentLanguageFlag ?? 2;
+          _currentLanguageFlag = profileData["languageFlag"] ?? _currentLanguageFlag ?? 1;
         });
       }
     } catch (e) {
@@ -242,10 +242,7 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
         return;
       }
 
-      // Get the appropriate service based on the selected country
       dynamic service = value == "jp" ? apiServiceJP : apiService;
-
-      // Check device ID for the selected country
       final deviceResponse = await service.checkDeviceId(deviceId);
 
       if (deviceResponse['success'] != true || deviceResponse['idNumber'] == null) {
@@ -253,7 +250,6 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
         return;
       }
 
-      // If registered, proceed with the update
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('phorjp', value);
       setState(() {
@@ -286,6 +282,7 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
       });
     }
   }
+
   void _showCountryLoginDialog(BuildContext context, String country) {
     if (_isCountryDialogShowing) return;
 
@@ -345,26 +342,26 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
     }
   }
 
-  // Function to check if a URL is a download link
-  bool _isDownloadableUrl(String url) {
+  bool _isPdfUrl(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null) return false;
+
+    if (url.toLowerCase().endsWith('.pdf')) {
+      return true;
+    }
+
     final mimeType = lookupMimeType(url);
-    if (mimeType == null) return false;
+    if (mimeType == 'application/pdf') {
+      return true;
+    }
 
-    // List of common download file extensions
-    const downloadableExtensions = [
-      'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
-      'zip', 'rar', '7z', 'tar', 'gz',
-      'apk', 'exe', 'dmg', 'pkg',
-      'jpg', 'jpeg', 'png', 'gif', 'bmp',
-      'mp3', 'wav', 'ogg',
-      'mp4', 'avi', 'mov', 'mkv',
-      'txt', 'csv', 'json', 'xml'
-    ];
+    if (uri.pathSegments.last.toLowerCase().contains('pdf')) {
+      return true;
+    }
 
-    return downloadableExtensions.any((ext) => url.toLowerCase().contains('.$ext'));
+    return false;
   }
 
-  // Function to launch URL in external browser
   Future<void> _launchInBrowser(String url) async {
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(
@@ -383,13 +380,168 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
       );
     }
   }
+
+  Future<void> _viewPdfInternally(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      String fileName = uri.pathSegments.last;
+      if (!fileName.toLowerCase().endsWith('.pdf')) {
+        fileName = 'document_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      }
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PDFViewerScreen(
+            pdfUrl: url,
+            fileName: fileName,
+            languageFlag: _currentLanguageFlag ?? 1,
+            shouldDeleteOnClose: true,
+          ),
+        ),
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: _currentLanguageFlag == 2
+            ? "PDFを開く際にエラーが発生しました"
+            : "Error opening PDF",
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+      );
+      await _launchInBrowser(url);
+    }
+  }
+
+  void _showDownloadDialog(String url, bool isPdf) {
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+    if (_isDownloadDialogShowing) return;
+
+    _isDownloadDialogShowing = true;
+
+    final uri = Uri.parse(url);
+    String fileName = uri.pathSegments.last;
+
+    if (fileName.isEmpty || fileName.length > 50) {
+      fileName = isPdf
+          ? 'document_${DateTime.now().millisecondsSinceEpoch}.pdf'
+          : 'file_${DateTime.now().millisecondsSinceEpoch}';
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Container(
+        padding: EdgeInsets.all(20),
+        height: MediaQuery.of(context).size.height * 0.35,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            SizedBox(height: 20),
+            Text(
+              _currentLanguageFlag == 2 ? 'ダウンロード' : 'Download',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            SizedBox(height: 15),
+            Text(
+              _currentLanguageFlag == 2 ? 'ファイル名:' : 'File name:',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+            ),
+            SizedBox(height: 8),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                fileName,
+                style: TextStyle(fontSize: 16),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Spacer(),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      _currentLanguageFlag == 2 ? 'キャンセル' : 'Cancel',
+                      style: TextStyle(fontSize: 16),
+                    ),
+                  ),
+                ),
+                SizedBox(width: 15),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      if (isPdf) {
+                        await _viewPdfInternally(url);
+                      } else {
+                        await _launchInBrowser(url);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue,
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      isPdf
+                          ? (_currentLanguageFlag == 2 ? '表示' : 'View')
+                          : (_currentLanguageFlag == 2 ? 'ダウンロード' : 'Download'),
+                      style: TextStyle(fontSize: 16, color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ).then((_) {
+      // Reset the flag when dialog is dismissed
+      _isDownloadDialogShowing = false;
+    });
+  }
+
   Future<void> _showInputMethodPicker() async {
     try {
       if (Platform.isAndroid) {
         const MethodChannel channel = MethodChannel('input_method_channel');
         await channel.invokeMethod('showInputMethodPicker');
       } else {
-        // iOS doesn't have this capability
         Fluttertoast.showToast(
           msg: "Keyboard selection is only available on Android",
           toastLength: Toast.LENGTH_SHORT,
@@ -400,10 +552,10 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
       debugPrint("Error showing input method picker: $e");
     }
   }
+
   Future<void> _debounceNavigation(String url) async {
     if (_isNavigating) return;
 
-    // Cancel any pending navigation
     _debounceTimer?.cancel();
 
     setState(() {
@@ -424,6 +576,7 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
       }
     });
   }
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -550,8 +703,8 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 14,
-                                      fontWeight: FontWeight.w500,  // Medium weight
-                                      letterSpacing: 0.5,          // Slightly spaced out letters
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: 0.5,
                                       shadows: [
                                         Shadow(
                                           color: Colors.black.withOpacity(0.2),
@@ -635,7 +788,7 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
-                                SizedBox(width: 15), // Adjust this value as needed
+                                SizedBox(width: 15),
                                 IconButton(
                                   icon: Icon(Icons.keyboard, size: 28),
                                   iconSize: 28,
@@ -679,7 +832,7 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
                                           builder: (context) => PDFViewerScreen(
                                             pdfUrl: manualUrl,
                                             fileName: fileName,
-                                            languageFlag: _currentLanguageFlag!, // Add this line
+                                            languageFlag: _currentLanguageFlag!,
                                           ),
                                         ),
                                       );
@@ -731,13 +884,11 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
                                   width: 40,
                                   height: 40,
                                 ),
-                                // Subtle reload icon (only visible when PH is active and not loading)
                                 if (_phOrJp == "ph" && !_isCountryLoadingPh)
                                   Opacity(
-                                    opacity: 0.6, // Make it subtle
+                                    opacity: 0.6,
                                     child: Icon(Icons.refresh, size: 20, color: Colors.white),
                                   ),
-                                // Loading indicator
                                 if (_isCountryLoadingPh)
                                   SizedBox(
                                     width: 20,
@@ -747,7 +898,6 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
                                       strokeWidth: 2,
                                     ),
                                   ),
-                                // Underline
                                 if (_phOrJp == "ph")
                                   Positioned(
                                     bottom: 0,
@@ -778,13 +928,11 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
                                   width: 40,
                                   height: 40,
                                 ),
-                                // Subtle reload icon (only visible when JP is active and not loading)
                                 if (_phOrJp == "jp" && !_isCountryLoadingJp)
                                   Opacity(
-                                    opacity: 0.6, // Make it subtle
+                                    opacity: 0.6,
                                     child: Icon(Icons.refresh, size: 20, color: Colors.white),
                                   ),
-                                // Loading indicator
                                 if (_isCountryLoadingJp)
                                   SizedBox(
                                     width: 20,
@@ -794,7 +942,6 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
                                       strokeWidth: 2,
                                     ),
                                   ),
-                                // Underline
                                 if (_phOrJp == "jp")
                                   Positioned(
                                     bottom: 0,
@@ -894,22 +1041,30 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
                       action: allGranted ? PermissionResponseAction.GRANT : PermissionResponseAction.DENY,
                     );
                   },
-                  // Handle download links by opening in external browser
                   shouldOverrideUrlLoading: (controller, navigationAction) async {
                     final url = navigationAction.request.url?.toString() ?? '';
 
-                    if (_isDownloadableUrl(url)) {
-                      await _launchInBrowser(url);
+                    // Convert specific HTTP URLs to HTTPS
+                    if (url.startsWith('http://192.168.1.213/V4/Common%20Software/Item%20Location%20Input%20Software%20v3.0/raymond_itemLocationInputFormv3.0.php') ||
+                        url.startsWith('http://220.157.175.232/V4/Common%20Software/Item%20Location%20Input%20Software%20v3.0/raymond_itemLocationInputFormv3.0.php')) {
+                      final httpsUrl = url.replaceFirst('http://', 'https://');
+                      await controller.loadUrl(urlRequest: URLRequest(url: WebUri(httpsUrl)));
                       return NavigationActionPolicy.CANCEL;
                     }
 
-                    // Use debounced navigation for regular links
+                    final isPdf = _isPdfUrl(url);
+                    if (isPdf || lookupMimeType(url) != null) {
+                      _showDownloadDialog(url, isPdf);
+                      return NavigationActionPolicy.CANCEL;
+                    }
+
                     _debounceNavigation(url);
                     return NavigationActionPolicy.CANCEL;
                   },
-                  // Also handle explicit download requests
                   onDownloadStartRequest: (controller, downloadStartRequest) async {
-                    await _launchInBrowser(downloadStartRequest.url.toString());
+                    final url = downloadStartRequest.url.toString();
+                    final isPdf = _isPdfUrl(url);
+                    _showDownloadDialog(url, isPdf);
                   },
                 ),
               if (_isLoading)
