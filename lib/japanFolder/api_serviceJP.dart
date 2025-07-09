@@ -17,7 +17,6 @@ class ApiServiceJP {
   static const int maxRetries = 6;
   static const Duration initialRetryDelay = Duration(seconds: 1);
 
-  // Cache for the last working server index
   int? _lastWorkingServerIndex;
   late http.Client httpClient;
   final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
@@ -40,32 +39,34 @@ class ApiServiceJP {
     );
   }
 
-  // Helper method to make parallel requests and return the first successful response
-  Future<T> _makeParallelRequest<T>(Future<T> Function(String apiUrl) requestFn) async {
-    // Try the last working server first if available
+  Future<T> _makeParallelRequest<T>(Future<_ApiResult<T>> Function(String apiUrl) requestFn) async {
     if (_lastWorkingServerIndex != null) {
       try {
-        final result = await requestFn(apiUrls[_lastWorkingServerIndex!])
-            .timeout(requestTimeout);
-        return result;
-      } catch (e) {
-        // If the last working server fails, proceed with parallel requests
+        return (await requestFn(apiUrls[_lastWorkingServerIndex!]).timeout(requestTimeout)).value;
+      } catch (_) {
+        // fallback to parallel below
       }
     }
 
-    // Create a list of futures for all API URLs
-    final futures = apiUrls.map((apiUrl) => requestFn(apiUrl).timeout(requestTimeout));
+    final List<Future<_ApiResult<T>?>> futures = apiUrls.map((apiUrl) async {
+      try {
+        final result = await requestFn(apiUrl).timeout(requestTimeout);
+        return result;
+      } catch (e) {
+        return null;
+      }
+    }).toList();
 
-    // Use Future.any to get the first successful response
-    try {
-      final result = await Future.any(futures);
-      // Remember which server worked
-      _lastWorkingServerIndex = apiUrls.indexOf((result as dynamic).apiUrlUsed ?? apiUrls[0]);
-      return result;
-    } catch (e) {
-      // If all parallel requests fail, throw an exception
-      throw Exception("All API URLs are unreachable");
+    final results = await Future.wait(futures);
+
+    for (final result in results) {
+      if (result != null) {
+        _lastWorkingServerIndex = apiUrls.indexOf(result.apiUrlUsed);
+        return result.value;
+      }
     }
+
+    throw Exception("All API URLs are unreachable");
   }
 
   Future<String> fetchSoftwareLink(int linkID) async {
@@ -74,7 +75,6 @@ class ApiServiceJP {
       throw Exception("Unable to get device ID");
     }
 
-    // First get the ID number associated with this device
     final deviceResponse = await checkDeviceId(deviceId);
     if (!deviceResponse['success']) {
       throw Exception("Device not registered or no ID number associated");
@@ -85,6 +85,7 @@ class ApiServiceJP {
       try {
         final result = await _makeParallelRequest((apiUrl) async {
           final uri = Uri.parse("${apiUrl}V4/Others/Kurt/ArkLinkAPI/kurt_fetchLink.php?linkID=$linkID");
+          print("Trying: $uri");
           final response = await httpClient.get(uri);
 
           if (response.statusCode == 200) {
@@ -103,7 +104,7 @@ class ApiServiceJP {
           throw Exception("HTTP ${response.statusCode}");
         });
 
-        return result.value;
+        return result;
       } catch (e) {
         print("Attempt $attempt failed: $e");
         if (attempt < maxRetries) {
@@ -124,6 +125,7 @@ class ApiServiceJP {
       try {
         final result = await _makeParallelRequest((apiUrl) async {
           final uri = Uri.parse("${apiUrl}V4/Others/Kurt/ArkLinkAPI/kurt_checkIdNumber.php");
+          print("Trying: $uri");
           final response = await httpClient.post(
             uri,
             headers: {"Content-Type": "application/json"},
@@ -141,7 +143,7 @@ class ApiServiceJP {
           throw Exception("HTTP ${response.statusCode}");
         });
 
-        return result.value;
+        return result;
       } catch (e) {
         print("Attempt $attempt failed: $e");
         if (attempt < maxRetries) {
@@ -158,6 +160,7 @@ class ApiServiceJP {
       try {
         final result = await _makeParallelRequest((apiUrl) async {
           final uri = Uri.parse("${apiUrl}V4/Others/Kurt/ArkLinkAPI/kurt_fetchProfile.php?idNumber=$idNumber");
+          print("Trying: $uri");
           final response = await httpClient.get(uri);
 
           if (response.statusCode == 200) {
@@ -171,7 +174,7 @@ class ApiServiceJP {
           throw Exception("HTTP ${response.statusCode}");
         });
 
-        return result.value;
+        return result;
       } catch (e) {
         print("Attempt $attempt failed: $e");
         if (attempt < maxRetries) {
@@ -188,6 +191,7 @@ class ApiServiceJP {
       try {
         await _makeParallelRequest((apiUrl) async {
           final uri = Uri.parse("${apiUrl}V4/Others/Kurt/ArkLinkAPI/kurt_updateLanguage.php");
+          print("Trying: $uri");
           final response = await httpClient.post(
             uri,
             body: {
@@ -206,7 +210,7 @@ class ApiServiceJP {
           }
           throw Exception("HTTP ${response.statusCode}");
         });
-        return; // Success
+        return;
       } catch (e) {
         print("Attempt $attempt failed: $e");
         if (attempt < maxRetries) {
@@ -223,6 +227,7 @@ class ApiServiceJP {
       try {
         final result = await _makeParallelRequest((apiUrl) async {
           final uri = Uri.parse("${apiUrl}V4/Others/Kurt/ArkLinkAPI/kurt_checkDeviceId.php?deviceID=$deviceId");
+          print("Trying: $uri");
           final response = await httpClient.get(uri);
 
           if (response.statusCode == 200) {
@@ -236,7 +241,7 @@ class ApiServiceJP {
           throw Exception("HTTP ${response.statusCode}");
         });
 
-        return result.value;
+        return result;
       } catch (e) {
         print("Attempt $attempt failed: $e");
         if (attempt < maxRetries) {
@@ -261,7 +266,6 @@ class MyHttpOverrides extends HttpOverrides {
   }
 }
 
-// Helper class to track which API URL was used
 class _ApiResult<T> {
   final T value;
   final String apiUrlUsed;

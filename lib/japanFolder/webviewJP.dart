@@ -1025,12 +1025,60 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreenJP> with Wi
                       _progress = 0;
                     });
                   },
-                  onLoadStop: (controller, url) {
+                  onLoadStop: (controller, url) async {
                     pullToRefreshController?.endRefreshing();
                     setState(() {
                       _isLoading = false;
                       _progress = 1;
                     });
+                    String scrollScript = """
+  function makeDialogScrollable() {
+    const dialog = document.querySelector('.tbox');
+    if (dialog) {
+      // Check if dialog is partially off-screen
+      const rect = dialog.getBoundingClientRect();
+      const isOffScreen = rect.left < 0 || rect.top < 0 || 
+                         rect.right > window.innerWidth || 
+                         rect.bottom > window.innerHeight;
+      
+      if (isOffScreen) {
+        // Make dialog container scrollable
+        const tinner = dialog.querySelector('.tinner');
+        if (tinner) {
+          tinner.style.overflow = 'auto';
+          tinner.style.maxHeight = '80vh';
+          tinner.style.maxWidth = '90vw';
+        }
+        
+        // Make content scrollable if needed
+        const tcontent = dialog.querySelector('.tcontent');
+        if (tcontent) {
+          tcontent.style.overflow = 'auto';
+          tcontent.style.maxHeight = '70vh';
+        }
+      }
+    }
+  }
+  
+  // Run initially and set up mutation observer for dynamic dialogs
+  makeDialogScrollable();
+  
+  const observer = new MutationObserver(function(mutations) {
+    makeDialogScrollable();
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true
+  });
+  """;
+
+                    try {
+                      await controller.evaluateJavascript(source: scrollScript);
+                    } catch (e) {
+                      debugPrint("Error making dialog scrollable: $e");
+                    }
                   },
                   onProgressChanged: (controller, progress) {
                     setState(() {
