@@ -1027,58 +1027,47 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreen> with Widg
                   },
                   onLoadStop: (controller, url) async {
                     pullToRefreshController?.endRefreshing();
+
+                    await controller.evaluateJavascript(source: """
+function hideElements() {
+  try {
+    const softwareButtons = document.querySelector('div[style*="overflow-x: hidden;overflow-y:auto"]');
+    if (softwareButtons) softwareButtons.style.display = 'none';
+    
+    const filterControls = document.querySelector('div.w3-round[style*="background: linear-gradient"]');
+    if (filterControls) filterControls.style.display = 'none';
+    
+    const headerButtons = document.querySelector('div.dpicture');
+    if (headerButtons) headerButtons.style.display = 'none';
+
+    const hamburgerIcon = document.querySelector('i.fa.fa-list.w3-xlarge.w3-text-white.hamburger#hamburger');
+    if (hamburgerIcon) hamburgerIcon.style.display = 'none';
+
+    const elementsHidden = !!softwareButtons && !!filterControls && !!headerButtons && !!hamburgerIcon;
+
+    if (!elementsHidden) {
+      setTimeout(hideElements, 300);
+    }
+  } catch (e) {
+    console.log('Error hiding elements:', e);
+  }
+}
+
+hideElements();
+
+const observer = new MutationObserver(hideElements);
+observer.observe(document.body, {
+  childList: true,
+  subtree: true
+});
+
+setTimeout(() => observer.disconnect(), 5000);
+""");
+
                     setState(() {
                       _isLoading = false;
                       _progress = 1;
                     });
-                    String scrollScript = """
-  function makeDialogScrollable() {
-    const dialog = document.querySelector('.tbox');
-    if (dialog) {
-      // Check if dialog is partially off-screen
-      const rect = dialog.getBoundingClientRect();
-      const isOffScreen = rect.left < 0 || rect.top < 0 || 
-                         rect.right > window.innerWidth || 
-                         rect.bottom > window.innerHeight;
-      
-      if (isOffScreen) {
-        // Make dialog container scrollable
-        const tinner = dialog.querySelector('.tinner');
-        if (tinner) {
-          tinner.style.overflow = 'auto';
-          tinner.style.maxHeight = '80vh';
-          tinner.style.maxWidth = '90vw';
-        }
-        
-        // Make content scrollable if needed
-        const tcontent = dialog.querySelector('.tcontent');
-        if (tcontent) {
-          tcontent.style.overflow = 'auto';
-          tcontent.style.maxHeight = '70vh';
-        }
-      }
-    }
-  }
-  
-  // Run initially and set up mutation observer for dynamic dialogs
-  makeDialogScrollable();
-  
-  const observer = new MutationObserver(function(mutations) {
-    makeDialogScrollable();
-  });
-  
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true
-  });
-  """;
-
-                    try {
-                      await controller.evaluateJavascript(source: scrollScript);
-                    } catch (e) {
-                      debugPrint("Error making dialog scrollable: $e");
-                    }
                   },
                   onProgressChanged: (controller, progress) {
                     setState(() {
