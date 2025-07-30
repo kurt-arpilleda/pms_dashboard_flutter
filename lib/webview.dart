@@ -1125,7 +1125,7 @@ function injectCalendarStyles() {
     /* Modern Calendar Container - Extended Width */
     .fc {
       background: #ffffff !important;
-      border-radius: 12px !important;
+     border-radius: 16px !important; 
       box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06) !important;
       margin: 0 -20px !important; /* Extend 20px on each side */
       overflow: hidden !important;
@@ -1331,7 +1331,7 @@ function injectCalendarStyles() {
     /* Mobile Responsive */
     @media (max-width: 768px) {
       .fc {
-        border-radius: 0 !important;
+      border-radius: 12px !important; 
         margin: 0 -15px !important; /* Smaller extension on mobile */
         width: calc(100% + 30px) !important;
         max-width: calc(100vw - 5px) !important;
