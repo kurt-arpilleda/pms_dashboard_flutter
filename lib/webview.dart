@@ -1025,104 +1025,359 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreen> with Widg
                       _progress = 0;
                     });
                   },
-                  onLoadStop: (controller, url) async   {
+                  onLoadStop: (controller, url) async {
                     pullToRefreshController?.endRefreshing();
-
                     await controller.evaluateJavascript(source: """
 function hideElements() {
   try {
-    const softwareButtons = document.querySelector('div[style*="overflow-x: hidden;overflow-y:auto"]');
-    if (softwareButtons) softwareButtons.style.display = 'none';
+    // More aggressive selectors to catch all variations
+    const softwareButtons = document.querySelectorAll('div[style*="overflow-x: hidden"], div[style*="overflow-x:hidden"]');
+    softwareButtons.forEach(el => el.style.display = 'none');
     
-    const filterControls = document.querySelector('div.w3-round[style*="background: linear-gradient"]');
-    if (filterControls) filterControls.style.display = 'none';
+    const filterControls = document.querySelectorAll('div.w3-round[style*="background: linear-gradient"], div.w3-round[style*="background:linear-gradient"]');
+    filterControls.forEach(el => el.style.display = 'none');
     
-    const headerButtons = document.querySelector('div.dpicture');
-    if (headerButtons) headerButtons.style.display = 'none';
-
-    const hamburgerIcon = document.querySelector('i.fa.fa-list.w3-xlarge.w3-text-white.hamburger#hamburger');
-    if (hamburgerIcon) hamburgerIcon.style.display = 'none';
-
-    const topHeader = document.querySelector('div.row > div.col-md-12.w3-padding.w3-round-large.w3-card-2[style*="background: linear-gradient(to right,white, #056291)"]');
-    if (topHeader) topHeader.style.display = 'none';
-
-    const taskCalendar = document.querySelector('div.col-md-4 > span#taskCalendar');
-    if (taskCalendar) taskCalendar.parentElement.style.display = 'none'; // hides the full col-md-4 div
-
+    const headerButtons = document.querySelectorAll('div.dpicture, .dpicture');
+    headerButtons.forEach(el => el.style.display = 'none');
+    
+    const hamburgerIcon = document.querySelectorAll('i.fa.fa-list, i.hamburger, #hamburger, .hamburger');
+    hamburgerIcon.forEach(el => el.style.display = 'none');
+    
+    const topHeaders = document.querySelectorAll('div[style*="#056291"], div[style*="background: linear-gradient(to right,white"], div.col-md-12.w3-padding.w3-round-large.w3-card-2');
+    topHeaders.forEach(el => el.style.display = 'none');
+    
+    const taskCalendars = document.querySelectorAll('span#taskCalendar, #taskCalendar');
+    taskCalendars.forEach(el => {
+      if (el.parentElement) el.parentElement.style.display = 'none';
+      el.style.display = 'none';
+    });
+    
+    // Additional selectors to catch more elements
+    const additionalHides = document.querySelectorAll(
+      'div.w3-bar, div.w3-top, nav, .navbar, .nav-bar, .header-nav, .top-nav, ' +
+      'div[class*="navigation"], div[class*="menu"], div[class*="header"], ' +
+      'div[style*="position: fixed"], div[style*="position:fixed"]'
+    );
+    additionalHides.forEach(el => {
+      if (!el.closest('.fc') && !el.closest('.calendar')) {
+        el.style.display = 'none';
+      }
+    });
+    
     const timeElement = document.querySelector('#time');
     if (timeElement) {
       timeElement.style.fontSize = '20px';
       timeElement.style.padding = '4px';
       timeElement.style.margin = '4px';
     }
-
-    const elementsHidden = !!softwareButtons && !!filterControls && !!headerButtons && !!hamburgerIcon && !!topHeader && !!taskCalendar;
-
-    if (!elementsHidden) {
-      setTimeout(hideElements, 300);
-    }
+    
+    // Force hide any visible non-calendar elements
+    setTimeout(() => {
+      const visibleElements = document.querySelectorAll('div:not(.fc):not(.fc *)');
+      visibleElements.forEach(el => {
+        const rect = el.getBoundingClientRect();
+        if (rect.height > 50 && !el.closest('.fc') && !el.textContent.includes('calendar')) {
+          const style = window.getComputedStyle(el);
+          if (style.position === 'fixed' || style.position === 'absolute') {
+            el.style.display = 'none';
+          }
+        }
+      });
+    }, 100);
+    
   } catch (e) {
     console.log('Error hiding elements:', e);
   }
 }
-
 hideElements();
-
-const observer = new MutationObserver(hideElements);
+// More aggressive observer that runs more frequently
+const observer = new MutationObserver(() => {
+  hideElements();
+});
 observer.observe(document.body, {
   childList: true,
-  subtree: true
+  subtree: true,
+  attributes: true,
+  attributeFilter: ['style', 'class']
 });
+
+// Additional periodic check to ensure elements stay hidden
+setInterval(hideElements, 500);
+
 function injectCalendarStyles() {
   const style = document.createElement('style');
-  style.innerHTML = `
-    /* Prevent horizontal overflow */
+  style.innerHTML = \`
     html, body {
       margin: 0 !important;
       padding: 0 !important;
       overflow-x: hidden !important;
       width: 100% !important;
       box-sizing: border-box !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      background: #f8fafc !important;
     }
-
-    /* Force calendar containers to max screen width without overflow */
-    .fc, .fc-view-container, .fc-view, .fc-dayGridMonth-view, .fc-dayGrid-view, 
+    
+    /* Modern Calendar Container - Full Width */
+    .fc {
+      background: #ffffff !important;
+      border-radius: 12px !important;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06) !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+      border: 1px solid #e2e8f0 !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 100% !important;
+    }
+    
+    .fc-view-container, .fc-view, .fc-dayGridMonth-view, .fc-dayGrid-view, 
     .fc-scroller, .fc-day-grid, .fc-content-skeleton, 
     .fc-day-grid table, .fc-content-skeleton table {
       width: 100% !important;
       max-width: 100% !important;
-      margin: 0 auto !important;
+      min-width: 100% !important;
+      margin: 0 !important;
       padding: 0 !important;
       box-sizing: border-box !important;
       overflow-x: hidden !important;
+      border: none !important;
     }
-
-    /* Ensure calendar cells fit and wrap text properly */
+    
+    /* Ensure calendar container parent uses full width */
+    .fc-view-container {
+      width: 100% !important;
+    }
+    
+    /* Modern Calendar Header */
+    .fc-toolbar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+      padding: 12px 16px !important;
+      margin: 0 !important;
+      border-radius: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      flex-wrap: nowrap !important;
+      width: 100% !important;
+      box-sizing: border-box !important;
+    }
+    
+    .fc-toolbar-chunk {
+      display: flex !important;
+      align-items: center !important;
+      gap: 4px !important;
+    }
+    
+    .fc-toolbar h2 {
+      color: #ffffff !important;
+      font-size: 18px !important;
+      font-weight: 600 !important;
+      margin: 0 !important;
+      white-space: nowrap !important;
+    }
+    
+    /* Modern Navigation Buttons */
+    .fc-button {
+      background: rgba(255,255,255,0.2) !important;
+      border: 1px solid rgba(255,255,255,0.3) !important;
+      color: #ffffff !important;
+      border-radius: 6px !important;
+      padding: 6px 10px !important;
+      font-size: 12px !important;
+      font-weight: 500 !important;
+      transition: all 0.2s ease !important;
+      margin: 0 2px !important;
+      min-width: auto !important;
+      white-space: nowrap !important;
+    }
+    
+    .fc-button:hover {
+      background: rgba(255,255,255,0.3) !important;
+      border-color: rgba(255,255,255,0.4) !important;
+      transform: translateY(-1px) !important;
+    }
+    
+    .fc-button:focus {
+      outline: none !important;
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.3) !important;
+    }
+    
+    .fc-button-active {
+      background: rgba(255,255,255,0.4) !important;
+      border-color: rgba(255,255,255,0.5) !important;
+    }
+    
+    /* Modern Day Headers */
+    .fc-day-header {
+      background: #f1f5f9 !important;
+      color: #475569 !important;
+      font-weight: 600 !important;
+      font-size: 14px !important;
+      padding: 12px 8px !important;
+      border-bottom: 2px solid #e2e8f0 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+      width: 14.285714% !important; /* Ensure equal column widths */
+      box-sizing: border-box !important;
+    }
+    
+    /* Modern Day Cells */
     .fc-day, .fc-day-top {
-      padding: 4px !important;
-      border: 1px solid #ccc !important;
+      padding: 8px !important;
+      min-height: 90px !important;
+      border: 1px solid #f1f5f9 !important;
+      vertical-align: top !important;
+      background: #ffffff !important;
+      transition: background-color 0.2s ease !important;
+      width: 14.285714% !important; /* Ensure equal column widths */
+      box-sizing: border-box !important;
     }
-
+    
+    .fc-day:hover {
+      background: #f8fafc !important;
+    }
+    
+    .fc-day-top {
+      font-size: 15px !important;
+      font-weight: 600 !important;
+      color: #334155 !important;
+      margin-bottom: 6px !important;
+    }
+    
+    /* Today Highlight */
+    .fc-today {
+      background: #eff6ff !important;
+      border-color: #3b82f6 !important;
+    }
+    
+    .fc-today .fc-day-top {
+      color: #2563eb !important;
+    }
+    
+    /* Other Month Days */
+    .fc-other-month {
+      background: #f8fafc !important;
+      opacity: 0.6 !important;
+    }
+    
+    .fc-other-month .fc-day-top {
+      color: #94a3b8 !important;
+    }
+    
+    /* Modern Events */
     .fc-title {
       white-space: normal !important;
       word-break: break-word !important;
       font-size: 13px !important;
+      line-height: 1.3 !important;
+      font-weight: 500 !important;
     }
-
+    
     .fc-day-grid-event {
-      min-height: 20px !important;
+      min-height: 24px !important;
+      font-size: 12px !important;
+      margin: 1px 0 !important;
+      padding: 3px 6px !important;
       overflow: visible !important;
+      border-radius: 6px !important;
+      border: none !important;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
     }
-  `;
+    
+    .fc-event {
+      border-radius: 6px !important;
+      padding: 3px 6px !important;
+      font-weight: 500 !important;
+      cursor: pointer !important;
+      transition: all 0.2s ease !important;
+    }
+    
+    .fc-event:hover {
+      transform: translateY(-1px) !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+    }
+    
+    /* Weekend Styling */
+    .fc-sun, .fc-sat {
+      background: #fefefe !important;
+    }
+    
+    /* Remove default borders */
+    .fc-unthemed td, .fc-unthemed th {
+      border-color: #f1f5f9 !important;
+    }
+    
+    /* Ensure table uses full width */
+    .fc table {
+      width: 100% !important;
+      table-layout: fixed !important;
+    }
+    
+    /* Force full width on all calendar rows */
+    .fc-row {
+      width: 100% !important;
+    }
+    
+    .fc-week {
+      width: 100% !important;
+    }
+    
+    /* Mobile Responsive */
+    @media (max-width: 768px) {
+      .fc {
+        border-radius: 0 !important;
+      }
+      
+      .fc-toolbar {
+        padding: 10px 12px !important;
+        flex-wrap: nowrap !important;
+      }
+      
+      .fc-toolbar-chunk {
+        gap: 2px !important;
+      }
+      
+      .fc-toolbar h2 {
+        font-size: 16px !important;
+      }
+      
+      .fc-button {
+        padding: 5px 8px !important;
+        font-size: 11px !important;
+        margin: 0 1px !important;
+      }
+      
+      .fc-day, .fc-day-top {
+        min-height: 70px !important;
+        padding: 6px !important;
+      }
+      
+      .fc-day-top {
+        font-size: 14px !important;
+      }
+      
+      .fc-event, .fc-day-grid-event {
+        font-size: 11px !important;
+        padding: 2px 4px !important;
+      }
+    }
+    
+    /* Smooth animations */
+    * {
+      transition: background-color 0.2s ease, border-color 0.2s ease !important;
+    }
+  \`;
   document.head.appendChild(style);
 }
 
-
 injectCalendarStyles();
-setTimeout(() => observer.disconnect(), 5000);
+
+// Keep checking for a longer period and don't disconnect the observer
+setTimeout(() => {
+  // Final aggressive hide after styles are loaded
+  hideElements();
+}, 2000);
 """);
-
-
                     setState(() {
                       _isLoading = false;
                       _progress = 1;
