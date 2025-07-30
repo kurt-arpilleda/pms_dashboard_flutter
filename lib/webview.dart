@@ -1076,46 +1076,39 @@ observer.observe(document.body, {
 function injectCalendarStyles() {
   const style = document.createElement('style');
   style.innerHTML = `
-    /* Make calendar take full width */
-    .fc-view-container,
-    .fc-view,
-    .fc-dayGridMonth-view,
-    .fc-dayGrid-view,
-    .fc-day-grid,
-    .fc-scroller,
-    .fc-row,
-    .fc-content-skeleton,
-    .fc-bg,
-    .fc-day,
-    .fc-day-top,
-    .fc-event-container,
-    .fc-content {
-      max-width: 100% !important;
+    /* Prevent horizontal overflow */
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow-x: hidden !important;
       width: 100% !important;
-      white-space: normal !important;
+      box-sizing: border-box !important;
     }
 
-    /* Wrap text in day cells */
+    /* Force calendar containers to max screen width without overflow */
+    .fc, .fc-view-container, .fc-view, .fc-dayGridMonth-view, .fc-dayGrid-view, 
+    .fc-scroller, .fc-day-grid, .fc-content-skeleton, 
+    .fc-day-grid table, .fc-content-skeleton table {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      box-sizing: border-box !important;
+      overflow-x: hidden !important;
+    }
+
+    /* Ensure calendar cells fit and wrap text properly */
+    .fc-day, .fc-day-top {
+      padding: 4px !important;
+      border: 1px solid #ccc !important;
+    }
+
     .fc-title {
       white-space: normal !important;
-      word-wrap: break-word !important;
+      word-break: break-word !important;
       font-size: 13px !important;
     }
 
-    /* Force table to stretch to fit container */
-    .fc-day-grid table,
-    .fc-content-skeleton table {
-      table-layout: fixed !important;
-      width: 100% !important;
-    }
-
-    /* Make each day cell more spacious */
-    .fc-day,
-    .fc-day-top {
-      padding: 4px !important;
-    }
-
-    /* Prevent events from overlapping or shrinking */
     .fc-day-grid-event {
       min-height: 20px !important;
       overflow: visible !important;
@@ -1123,6 +1116,7 @@ function injectCalendarStyles() {
   `;
   document.head.appendChild(style);
 }
+
 
 injectCalendarStyles();
 setTimeout(() => observer.disconnect(), 5000);
