@@ -1117,17 +1117,23 @@ function injectCalendarStyles() {
       background: #f8fafc !important;
     }
     
-    /* Modern Calendar Container - Full Width */
+    /* Prevent horizontal scrolling caused by extended calendar */
+    body {
+      overflow-x: hidden !important;
+    }
+    
+    /* Modern Calendar Container - Extended Width */
     .fc {
       background: #ffffff !important;
       border-radius: 12px !important;
       box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06) !important;
-      margin: 0 !important;
+      margin: 0 -20px !important; /* Extend 20px on each side */
       overflow: hidden !important;
       border: 1px solid #e2e8f0 !important;
-      width: 100% !important;
-      max-width: 100% !important;
+      width: calc(100% + 40px) !important; /* Add back the 40px total margin */
+      max-width: calc(100vw - 10px) !important; /* Ensure it doesn't exceed screen width minus small buffer */
       min-width: 100% !important;
+      position: relative !important;
     }
     
     .fc-view-container, .fc-view, .fc-dayGridMonth-view, .fc-dayGrid-view, 
@@ -1326,6 +1332,9 @@ function injectCalendarStyles() {
     @media (max-width: 768px) {
       .fc {
         border-radius: 0 !important;
+        margin: 0 -15px !important; /* Smaller extension on mobile */
+        width: calc(100% + 30px) !important;
+        max-width: calc(100vw - 5px) !important;
       }
       
       .fc-toolbar {
