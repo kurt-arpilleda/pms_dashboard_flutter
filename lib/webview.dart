@@ -1010,10 +1010,8 @@ class _SoftwareWebViewScreenState extends State<SoftwareWebViewScreen> with Widg
                   onLoadStop: (controller, url) async {
                     pullToRefreshController?.endRefreshing();
                     await controller.evaluateJavascript(source: """
-// First, let's be very specific about what we hide and completely exempt modals
 function hideElements() {
   try {
-    // Define what should NEVER be hidden (whitelist approach)
     const protectedSelectors = [
       '#modal-izi-task',
       '.modal',
@@ -1023,23 +1021,32 @@ function hideElements() {
       '[id*="modal"]',
       '.fc',
       '.fc *',
-      '[class*="calendar"]'
+      '[class*="calendar"]',
+      '.w3-card-2.w3-round[style*="background: #3452B4"]',
+      '.fa-calendar-check'
     ];
     
     function isProtected(element) {
-      // Check if element matches any protected selector
       for (let selector of protectedSelectors) {
         try {
           if (element.matches && element.matches(selector)) return true;
           if (element.closest && element.closest(selector)) return true;
         } catch (e) {
-          // Ignore selector errors
         }
       }
+      
+      if (element.querySelector && element.querySelector('.fa-calendar-check')) {
+        return true;
+      }
+      
+      if (element.parentElement && element.parentElement.querySelector && 
+          element.parentElement.querySelector('.fa-calendar-check')) {
+        return true;
+      }
+      
       return false;
     }
     
-    // Hide specific problematic elements only
     const specificHides = [
       'div[style*="overflow-x: hidden"]:not(#modal-izi-task):not(.modal)',
       'div[style*="overflow-x:hidden"]:not(#modal-izi-task):not(.modal)',
@@ -1066,11 +1073,18 @@ function hideElements() {
           }
         });
       } catch (e) {
-        // Ignore selector errors
       }
     });
     
-    // Hide navigation elements but be very careful
+    const parentDiv = document.querySelector('.d-flexzz.justify-content-end');
+    if (parentDiv) {
+      Array.from(parentDiv.children).forEach(child => {
+        if (!child.querySelector('.fa-calendar-check')) {
+          child.style.display = 'none';
+        }
+      });
+    }
+    
     const navSelectors = [
       'div.w3-bar:not(.fc):not(.fc *):not(#modal-izi-task):not(.modal)',
       'div.w3-top:not(.fc):not(.fc *):not(#modal-izi-task):not(.modal)', 
@@ -1090,11 +1104,9 @@ function hideElements() {
           }
         });
       } catch (e) {
-        // Ignore selector errors
       }
     });
     
-    // Style the time element if it exists
     const timeElement = document.querySelector('#time');
     if (timeElement && !isProtected(timeElement)) {
       timeElement.style.fontSize = '20px';
@@ -1107,7 +1119,6 @@ function hideElements() {
   }
 }
 
-// Force show modal function
 function forceShowModal() {
   const modal = document.querySelector('#modal-izi-task');
   if (modal) {
@@ -1117,7 +1128,6 @@ function forceShowModal() {
     modal.style.zIndex = '999999 !important';
     modal.style.position = 'fixed !important';
     
-    // Also check for any parent containers that might be hidden
     let parent = modal.parentElement;
     while (parent && parent !== document.body) {
       if (parent.style.display === 'none') {
@@ -1134,7 +1144,6 @@ function forceShowModal() {
     console.log('Modal #modal-izi-task not found');
   }
   
-  // Also check for sweet alerts
   const sweetAlerts = document.querySelectorAll('.sweet-alert, .swal, [class*="swal"]');
   sweetAlerts.forEach(alert => {
     alert.style.display = 'block !important';
@@ -1144,10 +1153,8 @@ function forceShowModal() {
   });
 }
 
-// Run initial hide
 hideElements();
 
-// Create a much more conservative observer
 const observer = new MutationObserver((mutations) => {
   let shouldHide = false;
   let shouldShowModal = false;
@@ -1156,16 +1163,15 @@ const observer = new MutationObserver((mutations) => {
     if (mutation.type === 'childList') {
       mutation.addedNodes.forEach((node) => {
         if (node.nodeType === 1) {
-          // If modal was added, ensure it shows
           if (node.id === 'modal-izi-task' || 
               (node.querySelector && node.querySelector('#modal-izi-task'))) {
             shouldShowModal = true;
           }
-          // Only trigger hide for non-protected elements
           else if (!node.closest('#modal-izi-task') && 
                    !node.classList?.contains('modal') &&
                    !node.classList?.contains('sweet-alert') &&
-                   !node.classList?.contains('swal')) {
+                   !node.classList?.contains('swal') &&
+                   !node.querySelector('.fa-calendar-check')) {
             shouldHide = true;
           }
         }
@@ -1183,10 +1189,9 @@ const observer = new MutationObserver((mutations) => {
 observer.observe(document.body, {
   childList: true,
   subtree: true,
-  attributes: false // Disable attribute observation to reduce interference
+  attributes: false
 });
 
-// Much less aggressive interval - only run if no modal is visible
 setInterval(() => {
   const modal = document.querySelector('#modal-izi-task');
   const isModalVisible = modal && modal.offsetParent !== null;
@@ -1194,9 +1199,9 @@ setInterval(() => {
   if (!isModalVisible) {
     hideElements();
   } else {
-    forceShowModal(); // Ensure it stays visible
+    forceShowModal();
   }
-}, 1000); // Reduced frequency
+}, 1000);
 
 function injectCalendarStyles() {
   const style = document.createElement('style');
@@ -1215,7 +1220,6 @@ function injectCalendarStyles() {
       overflow-x: hidden !important;
     }
     
-    /* CRITICAL: Ensure modals are always visible and on top */
     #modal-izi-task {
       display: block !important;
       visibility: visible !important;
@@ -1249,7 +1253,6 @@ function injectCalendarStyles() {
       opacity: 1 !important;
     }
     
-    /* Modern Calendar Container - Extended Width */
     .fc {
       background: #ffffff !important;
       border-radius: 16px !important; 
@@ -1280,7 +1283,6 @@ function injectCalendarStyles() {
       width: 100% !important;
     }
     
-    /* Modern Calendar Header */
     .fc-toolbar {
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
       padding: 12px 16px !important;
@@ -1308,7 +1310,6 @@ function injectCalendarStyles() {
       white-space: nowrap !important;
     }
     
-    /* Modern Navigation Buttons */
     .fc-button {
       background: rgba(255,255,255,0.2) !important;
       border: 1px solid rgba(255,255,255,0.3) !important;
@@ -1339,7 +1340,6 @@ function injectCalendarStyles() {
       border-color: rgba(255,255,255,0.5) !important;
     }
     
-    /* Modern Day Headers */
     .fc-day-header {
       background: #f1f5f9 !important;
       color: #475569 !important;
@@ -1353,7 +1353,6 @@ function injectCalendarStyles() {
       box-sizing: border-box !important;
     }
     
-    /* Modern Day Cells */
     .fc-day, .fc-day-top {
       padding: 8px !important;
       min-height: 90px !important;
@@ -1376,7 +1375,6 @@ function injectCalendarStyles() {
       margin-bottom: 6px !important;
     }
     
-    /* Today Highlight */
     .fc-today {
       background: #eff6ff !important;
       border-color: #3b82f6 !important;
@@ -1386,7 +1384,6 @@ function injectCalendarStyles() {
       color: #2563eb !important;
     }
     
-    /* Other Month Days */
     .fc-other-month {
       background: #f8fafc !important;
       opacity: 0.6 !important;
@@ -1396,7 +1393,6 @@ function injectCalendarStyles() {
       color: #94a3b8 !important;
     }
     
-    /* Modern Events */
     .fc-title {
       white-space: normal !important;
       word-break: break-word !important;
@@ -1429,23 +1425,19 @@ function injectCalendarStyles() {
       box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
     }
     
-    /* Weekend Styling */
     .fc-sun, .fc-sat {
       background: #fefefe !important;
     }
     
-    /* Remove default borders */
     .fc-unthemed td, .fc-unthemed th {
       border-color: #f1f5f9 !important;
     }
     
-    /* Ensure table uses full width */
     .fc table {
       width: 100% !important;
       table-layout: fixed !important;
     }
     
-    /* Force full width on all calendar rows */
     .fc-row {
       width: 100% !important;
     }
@@ -1454,7 +1446,6 @@ function injectCalendarStyles() {
       width: 100% !important;
     }
     
-    /* Mobile Responsive */
     @media (max-width: 768px) {
       .fc {
         border-radius: 12px !important; 
@@ -1497,7 +1488,6 @@ function injectCalendarStyles() {
       }
     }
     
-    /* Smooth animations */
     * {
       transition: background-color 0.2s ease, border-color 0.2s ease !important;
     }
@@ -1507,7 +1497,6 @@ function injectCalendarStyles() {
 
 injectCalendarStyles();
 
-// Enhanced click handler for ADD button
 document.addEventListener('click', function(e) {
   console.log('Click detected on:', e.target);
   
@@ -1518,25 +1507,21 @@ document.addEventListener('click', function(e) {
   )) {
     console.log('ADD button clicked!');
     
-    // Force show modal immediately
     setTimeout(forceShowModal, 10);
     setTimeout(forceShowModal, 100);
     setTimeout(forceShowModal, 500);
   }
-}, true); // Use capture phase
+}, true);
 
-// Also listen for any modal-related events
 document.addEventListener('DOMContentLoaded', forceShowModal);
 document.addEventListener('load', forceShowModal);
 
-// Final cleanup and modal show
 setTimeout(() => {
   hideElements();
   forceShowModal();
   console.log('Final setup complete');
 }, 2000);
 
-// Debug: Log when modal appears in DOM
 const modalObserver = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     mutation.addedNodes.forEach((node) => {
@@ -1555,6 +1540,7 @@ modalObserver.observe(document.body, { childList: true, subtree: true });
                       _progress = 1;
                     });
                   },
+
                   onProgressChanged: (controller, progress) {
                     setState(() {
                       _progress = progress / 100;
